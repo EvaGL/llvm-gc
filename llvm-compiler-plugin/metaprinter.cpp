@@ -38,5 +38,5 @@ namespace {
         }
     };
 
-    GCMetadataPrinterRegistry::Add<TestGCPrinter> X("testgc", "Testing llvm gc interfaces");
+    GCMetadataPrinterRegistry::Add<TestGCPrinter> X("jblab-gc", "Metadata printer for jblab gc");
 }
