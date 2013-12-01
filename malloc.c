@@ -6304,13 +6304,12 @@ DLMALLOC_EXPORT size_t sweep() {
       while (segment_holds(s, q) &&
              q < m->top && q->head != FENCEPOST_HEAD) {
         printf("chunk: %p\n", q);
-        void* n = next_chunk(q);
         if (!flag4inuse(q) && is_inuse(q)) {
             free(chunk2mem(q));
             printf("free that chunk\n");
         } 
         clear_flag4(q);
-        q = n;
+        q = next_chunk(q);
       }
       s = s->next;
     }
