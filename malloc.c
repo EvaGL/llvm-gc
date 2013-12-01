@@ -6294,3 +6294,26 @@ DLMALLOC_EXPORT size_t get_mark(void* pointer) {
   mchunkptr chunk = mem2chunk(pointer);
   return flag4inuse(chunk);
 }
+
+DLMALLOC_EXPORT size_t sweep() {
+  mstate m = gm;
+  if (is_initialized(m)) {
+    msegmentptr s = &m->seg;
+    while (s != 0) {
+      mchunkptr q = align_as_chunk(s->base);
+      while (segment_holds(s, q) &&
+             q < m->top && q->head != FENCEPOST_HEAD) {
+        printf("chunk: %p\n", q);
+        void* n = next_chunk(q);
+        if (!flag4inuse(q) && is_inuse(q)) {
+            free(chunk2mem(q));
+            printf("free that chunk\n");
+        } 
+        clear_flag4(q);
+        q = n;
+      }
+      s = s->next;
+    }
+  }
+}
+
