@@ -1,8 +1,8 @@
 #include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/GCMetadata.h"
 #include "llvm/Support/Compiler.h"
-#include "llvm/Module.h"
-#include "llvm/DerivedTypes.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/DerivedTypes.h"
 #include <iostream>
 using namespace llvm;
 
