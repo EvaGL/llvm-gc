@@ -8,7 +8,7 @@ void findRoots() {
     	int* pmetadata = *((int**) rbp);
     	int pointerNumbers = *pmetadata;
 		int i;
-        for (i = 0; i < pointerNumbers; ++i) {
+        for (i = 1; i <= pointerNumbers; ++i) {
 			visit_object(*((void **)(rbp + *(pmetadata + i))));
 		}
 		rbp = *(void **)(rbp + sizeof(void *));
