@@ -3,7 +3,7 @@
 
 void findRoots() {
 	void* rbp;
-    asm("\t movl %%ebp,%0" : "=r"(rbp));
+    asm("\t movq %%rbp,%0" : "=r"(rbp));
     while (rbp) {
     	int* pmetadata = *((int**) rbp);
     	int pointerNumbers = *pmetadata;
