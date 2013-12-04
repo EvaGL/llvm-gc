@@ -1,14 +1,15 @@
 test: test.o visit.o graph.o
-	g++ -Wall test.o visit.o graph.o -o test
+	gcc -Wall test.o visit.o graph.o -o test
 
-test.o: test.cpp
-	g++ -Wall -c test.cpp
+test.o: test.c
+	gcc -Wall -c test.c
 
-visit.o: visit.cpp
-	g++ -Wall -c visit.cpp
+visit.o: visit.c
+	gcc -Wall -c visit.c
 
-graph.o: graph.cpp
-	g++ -Wall -c graph.cpp
+graph.o: graph.c
+	gcc -Wall -c graph.c
 
 clean:
 	rm -rf *.o test
+

@@ -1,14 +1,10 @@
 #ifndef GRAPH_H
 #define GRAPH_H
 
-#include <fstream>
+#include <stdio.h>
 
-struct graph {
-	std::string file_name;
-	std::ofstream file_out;
-	graph(std::string name);
-	void write(void* parent, void* son);
-	~graph();
-};
+FILE* graph_init(char* name);
+void graph_write(void* parent, void* son, FILE* file_out);
+void graph_delete(FILE* file_out);
 
 #endif 
