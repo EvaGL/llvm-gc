@@ -30,6 +30,7 @@ tree* tree_init(int val, tree *left_new, tree *right_new) {
     new_tree->value = val;
     new_tree->left = left_new;
     new_tree->right = right_new;
+    return new_tree;
 }
 
 
