@@ -46,8 +46,8 @@ static void visit_object(void* start_obj) {
             num_ptr++;
             int* res = (int *) (ptr + *num_ptr);
             graph_write(ptr, (void*)*res, file_out);
-            if (*res && !get_mark(res)) {
-                mark(res);
+            if (*res && !get_mark(*res)) {
+                mark(*res);
                 push((void*)*res);
             }
         }
@@ -58,6 +58,7 @@ static void gc_mark() {
 	file_out = graph_init("graph.gv");
 	void* rbp;
     asm("\t movq %%rbp,%0" : "=r"(rbp));
+    rbp = **((void***) rbp); // get caller
     while (rbp) {
     	int* pmetadata = *((int**) rbp);
     	int pointerNumbers = *pmetadata;

@@ -50,11 +50,8 @@ tree* generate_tree_rec(int height, int number) {
 
 int main() {
     tree* tr1 = generate_tree_rec(3, 1);    
-    show(tr1);
     printf("\n");
-    tree* tr2 = generate_tree_rec(2, 1);    
-    show(tr2);    
-
+    tr1 = generate_tree_rec(2, 1);    
     gc();
     //visit_object(tr);
     return 0;
