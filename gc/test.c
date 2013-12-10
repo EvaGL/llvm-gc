@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "visit.h"
+#include "gc.h"
 
 typedef struct _tree {
     int meta[3];
@@ -55,6 +55,7 @@ int main() {
     tree* tr2 = generate_tree_rec(2, 1);    
     show(tr2);    
 
+    gc();
     //visit_object(tr);
     return 0;
 }
