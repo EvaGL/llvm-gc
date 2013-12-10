@@ -6,6 +6,7 @@ int main() {
 	unmark(a);
 	printf("mark is %d\n", get_mark(a));
 	a[5] = 47;
-	free(a);
-	return 0;
+    sweep();
+    printf("%p\n", a);
+    return 0;
 }

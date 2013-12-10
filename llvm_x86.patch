@@ -1,0 +1,47 @@
+diff -rupN X86_backup/X86FrameLowering.cpp X86/X86FrameLowering.cpp
+--- X86_backup/X86FrameLowering.cpp	2013-11-22 11:26:20.725704871 +0400
++++ X86/X86FrameLowering.cpp	2013-11-27 01:51:06.411164798 +0400
+@@ -46,7 +46,12 @@ bool X86FrameLowering::hasFP(const Machi
+   const MachineFrameInfo *MFI = MF.getFrameInfo();
+   const MachineModuleInfo &MMI = MF.getMMI();
+   const TargetRegisterInfo *RegInfo = TM.getRegisterInfo();
+-
++  // jblab-gc needs frame pointer in order to find roots in stack
++  const Function* F = MF.getFunction();
++  if (F->hasGC() && strcmp(F->getGC(), "jblab-gc") == 0) {
++    return true;
++  }
++  
+   return (MF.getTarget().Options.DisableFramePointerElim(MF) ||
+           RegInfo->needsStackRealignment(MF) ||
+           MFI->hasVarSizedObjects() ||
+@@ -763,6 +768,16 @@ void X86FrameLowering::emitPrologue(Mach
+       Moves.push_back(MachineMove(FrameLabel, FPDst, FPSrc));
+     }
+ 
++    // Push pointer to stack map 
++    const Function* F = MF.getFunction();
++    if (F->hasGC() && strcmp(F->getGC(), "jblab-gc") == 0) {
++        std::string label = "__gc_" + std::string(F->getName()); 
++        GlobalVariable* value = MMI.getModule()->getGlobalVariable(label);   
++        BuildMI(MBB, MBBI, DL, TII.get(Is64Bit ? X86::PUSH64r : X86::PUSH32r))
++            .addGlobalAddress(value)
++            .setMIFlag(MachineInstr::FrameSetup);
++    }
++
+     // Update EBP with the new base value.
+     BuildMI(MBB, MBBI, DL,
+             TII.get(Is64Bit ? X86::MOV64rr : X86::MOV32rr), FramePtr)
+@@ -1028,6 +1043,12 @@ void X86FrameLowering::emitEpilogue(Mach
+       NumBytes = FrameSize - CSSize;
+     }
+     
++    // jblab-gc requires more clean-up
++    const Function* F = MF.getFunction();
++    if (F->hasGC() && strcmp(F->getGC(), "jblab-gc") == 0) {
++        emitSPUpdate(MBB, MBBI, StackPtr, Is64Bit ? 8 : 4, Is64Bit, UseLEA, TII, *RegInfo);
++    }
++
+     // Pop EBP.
+     BuildMI(MBB, MBBI, DL,
+             TII.get(Is64Bit ? X86::POP64r : X86::POP32r), FramePtr);
