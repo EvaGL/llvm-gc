@@ -9,8 +9,10 @@ void findRoots() {
     	int pointerNumbers = *pmetadata;
 		int i;
         for (i = 1; i <= pointerNumbers; ++i) {
-			visit_object(*((void **)(rbp + *(pmetadata + i))));
+			FILE* file_out = graph_init("graph.gv");
+			visit_object_graph(*((void **)(rbp + *(pmetadata + i))), file_out);
 		}
 		rbp = *(void **)(rbp + sizeof(void *));
 	}
+	graph_delete(file_out);
 }
