@@ -6308,7 +6308,7 @@ DLMALLOC_EXPORT size_t sweep() {
             free(chunk2mem(q));
             printf("free that chunk\n");
         }
-        if (q < m->top) {
+        if (q < m->top && q->head != FENCEPOST_HEAD) {
             clear_flag4(q);
             q = next_chunk(q);
         }
