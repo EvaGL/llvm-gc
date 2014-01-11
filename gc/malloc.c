@@ -6307,9 +6307,11 @@ DLMALLOC_EXPORT size_t sweep() {
         if (!flag4inuse(q) && is_inuse(q)) {
             free(chunk2mem(q));
             printf("free that chunk\n");
-        } 
-        clear_flag4(q);
-        q = next_chunk(q);
+        }
+        if (q < m->top) {
+            clear_flag4(q);
+            q = next_chunk(q);
+        }
       }
       s = s->next;
     }

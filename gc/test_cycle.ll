@@ -84,8 +84,8 @@ define i32 @main() nounwind uwtable gc "jblab-gc" {
   %39 = getelementptr inbounds %struct._list* %38, i32 0, i32 1
   store %struct._list* %31, %struct._list** %39, align 8
   call void (...)* @gc()
-  store %struct._list* null, %struct._list** %c, align 8
-  call void (...)* @gc()
+  ;store %struct._list* null, %struct._list** %c, align 8
+  ;call void (...)* @gc()
   ret i32 0
 }
 
