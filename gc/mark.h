@@ -6,4 +6,5 @@ void mark(void*);
 void unmark(void*);
 size_t get_mark(void*);
 void sweep();
+void* stack_is_full();
 #endif

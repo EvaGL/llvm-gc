@@ -2,10 +2,11 @@
 #include "graph.h"
 #include "mark.h"
 
-#define N 100
+#define N 2
 static void* my_stack[N];
 static int end = 0;
 static FILE* file_out;
+static int STACK_IS_FULL = 0;
 
 static show_stack() {
     int i = 0;
@@ -16,8 +17,10 @@ static show_stack() {
 }
 
 static void push(void* obj) {
+    printf("end = %d\n", end);
     if (end == N + 1) {
         printf("Panic! Stack is full!\n");
+        STACK_IS_FULL = 1;
         return;    
     }
     my_stack[end] = obj;
@@ -62,12 +65,22 @@ static void gc_mark() {
     while (rbp) {
     	int* pmetadata = *((int**) rbp);
     	int pointerNumbers = *pmetadata;
+        printf("%d\n", pointerNumbers);
 		int i;
         for (i = 1; i <= pointerNumbers; ++i) {
 			visit_object(*((void **)(rbp + *(pmetadata + i))));
 		}
 		rbp = *(void **)(rbp + sizeof(void *));
 	}
+    if (STACK_IS_FULL) {
+        STACK_IS_FULL = 0;
+        void* obj = stack_is_full();
+        printf("%p\n", obj);
+        while (obj) {
+            visit_object(obj);
+            obj = stack_is_full();            
+        }    
+    }
 	graph_delete(file_out);
 }
 

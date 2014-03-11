@@ -6318,3 +6318,35 @@ DLMALLOC_EXPORT size_t sweep() {
   }
 }
 
+static msegmentptr s = 0;
+static mchunkptr q = 0;
+
+
+DLMALLOC_EXPORT void* stack_is_full() {
+  mstate m = gm;
+  if (is_initialized(m)) {
+    if (s != 0) {
+        if (q < m->top && q->head != FENCEPOST_HEAD) {
+            q = next_chunk(q);
+        }
+    } else {
+        s = &m->seg;
+        q = align_as_chunk(s->base);
+    }
+    while (s != 0) {
+      while (segment_holds(s, q) &&
+             q < m->top && q->head != FENCEPOST_HEAD) {
+        printf("visit chunk: %p\n", q);
+        if (flag4inuse(q) && is_inuse(q)) {
+            return chunk2mem(q);            
+        }
+        if (q < m->top && q->head != FENCEPOST_HEAD) {
+            q = next_chunk(q);
+        }
+      }
+      s = s->next;
+    }
+    return NULL;
+  }
+}
+
