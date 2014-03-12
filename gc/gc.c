@@ -18,7 +18,7 @@ static show_stack() {
 
 static void push(void* obj) {
     printf("end = %d\n", end);
-    if (end == N + 1) {
+    if (end == N) {
         printf("Panic! Stack is full!\n");
         STACK_IS_FULL = 1;
         return;    
