@@ -37,7 +37,6 @@ namespace {
                 }
             }
             GlobalVariable* chainBottom = new GlobalVariable(M, chainPtr, false, GlobalValue::ExternalLinkage, 0, "chainBottom");
-            //M.getOrInsertGlobal("chainBottom", chainPtr);
             return true;
         }
 

@@ -77,7 +77,7 @@ static void gc_mark() {
 		}
         current = current->parent;
 	}
-  /*  if (STACK_IS_FULL) {
+    if (STACK_IS_FULL) {
         STACK_IS_FULL = 0;
         void* obj = stack_is_full();
         printf("%p\n", obj);
@@ -86,7 +86,6 @@ static void gc_mark() {
             obj = stack_is_full();            
         }    
     }
-    */
 	graph_delete(file_out);
 }
 
