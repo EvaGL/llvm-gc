@@ -8,6 +8,12 @@ static int end = 0;
 static FILE* file_out;
 static int STACK_IS_FULL = 0;
 
+typedef struct _chain {
+    int* meta;
+    struct _chain *parent;
+} chain;
+
+chain* chainBottom = NULL;
 static show_stack() {
     int i = 0;
     for (i = 0; i < N; ++i) {
@@ -59,20 +65,19 @@ static void visit_object(void* start_obj) {
 
 static void gc_mark() {
 	file_out = graph_init("graph.gv");
-	void* rbp;
-    asm("\t movq %%rbp,%0" : "=r"(rbp));
-    rbp = **((void***) rbp); // get caller
-    while (rbp) {
-    	int* pmetadata = *((int**) rbp);
+    chain* current = chainBottom;
+    while (current) {
+    	int* pmetadata = current->meta;
+        void* currentPtr = current;
     	int pointerNumbers = *pmetadata;
         printf("%d\n", pointerNumbers);
 		int i;
         for (i = 1; i <= pointerNumbers; ++i) {
-			visit_object(*((void **)(rbp + *(pmetadata + i))));
+			visit_object(*((void **)(currentPtr + *(pmetadata + i))));
 		}
-		rbp = *(void **)(rbp + sizeof(void *));
+        current = current->parent;
 	}
-    if (STACK_IS_FULL) {
+  /*  if (STACK_IS_FULL) {
         STACK_IS_FULL = 0;
         void* obj = stack_is_full();
         printf("%p\n", obj);
@@ -81,6 +86,7 @@ static void gc_mark() {
             obj = stack_is_full();            
         }    
     }
+    */
 	graph_delete(file_out);
 }
 
