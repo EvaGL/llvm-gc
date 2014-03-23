@@ -32,8 +32,10 @@ namespace {
                 for (GCFunctionInfo::roots_iterator root = info.roots_begin(); root != info.roots_end(); ++root) {
                     int stackOffset = root->StackOffset;
                     if (stackOffset >= 0) {
-                        stackOffset = stackOffset - (frameSize - 2*sizeof(void*)); 
-                    }
+                        stackOffset = stackOffset - (frameSize - 2 * ptrSize); 
+                    } else {
+		        stackOffset = stackOffset + 3 * ptrSize; // + rbp
+		    }
                     ap.EmitInt32(stackOffset);
                 }
             }
