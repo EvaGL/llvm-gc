@@ -28,8 +28,15 @@ namespace {
                 MCSymbol *label = os.getContext().GetOrCreateSymbol("__gc_" + info.getFunction().getName());
                 os.EmitLabel(label);
                 ap.EmitInt32(info.roots_size());
+                size_t frameSize = info.getFrameSize();
                 for (GCFunctionInfo::roots_iterator root = info.roots_begin(); root != info.roots_end(); ++root) {
-                    ap.EmitInt32(root->StackOffset);
+                    int stackOffset = root->StackOffset;
+                    if (stackOffset >= 0) {
+                        stackOffset = stackOffset - (frameSize - 2 * ptrSize); 
+                    } else {
+		        stackOffset = stackOffset + 3 * ptrSize; // + rbp
+		    }
+                    ap.EmitInt32(stackOffset);
                 }
             }
         }
