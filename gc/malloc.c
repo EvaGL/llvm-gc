@@ -522,6 +522,14 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 */
 
 /* Version identifier to allow people to support multiple versions */
+
+
+#define DLMALLOC_WRAPPED
+#define MORECORE constMoreCore
+#define MORECORE_CANNOT_TRIM
+
+#define HAVE_MMAP 0
+
 #ifndef DLMALLOC_VERSION
 #define DLMALLOC_VERSION 20806
 #endif /* DLMALLOC_VERSION */
@@ -815,7 +823,11 @@ extern "C" {
 #ifndef USE_DL_PREFIX
 #define dlcalloc               calloc
 #define dlfree                 free
-#define dlmalloc               malloc
+  #ifndef DLMALLOC_WRAPPED
+    #define dlmalloc           malloc
+  #else
+    #define malloc_wrapped     malloc
+#endif
 #define dlmemalign             memalign
 #define dlposix_memalign       posix_memalign
 #define dlrealloc              realloc
@@ -851,6 +863,11 @@ extern "C" {
   maximum supported value of n differs across systems, but is in all
   cases less than the maximum representable value of a size_t.
 */
+
+void* constMoreCore(int);
+void* malloc_wrapped(size_t);
+void gc();
+
 DLMALLOC_EXPORT void* dlmalloc(size_t);
 
 /*
@@ -6279,6 +6296,49 @@ History:
          structure of old version,  but most details differ.)
 
 */
+
+
+/* Custom MORECORE */
+
+
+const int HEAP_SIZE = 4096; // 40mb
+static int morecore_was_used = 0;
+static void *sbrk_top = 0;
+
+DLMALLOC_EXPORT void* constMoreCore(int size) {
+  printf("Custom morecore invoked, %d requested\n", size);
+  if (size == 0) {
+    return sbrk_top;
+  }
+  if (size < 0 || size > HEAP_SIZE || morecore_was_used) {
+    printf("baaaaaad request\n");
+    return MFAIL;
+  }
+  void* ptr = MORECORE_DEFAULT(HEAP_SIZE);
+  if (ptr == 0 || ptr == MFAIL) {
+    return MFAIL;
+  }
+  sbrk_top = ((char*)ptr) + HEAP_SIZE;
+  morecore_was_used = 1;
+  return ptr;
+}
+
+DLMALLOC_EXPORT void* malloc_wrapped(size_t size) {
+  if (size == 0) {
+  	return NULL;
+  }
+  printf("malloc_wrapped invoked, size = %d ", size);
+  void* res = dlmalloc(size);
+  if (res) {
+    printf("address = %p\n", res);
+    return res;
+  } 
+  printf("======================gc invoked\n");
+  gc();
+  void* p =  dlmalloc(size);
+  printf("address = %p\n", p);
+  return p; 
+}
 
 DLMALLOC_EXPORT void mark(void* pointer) {
   mchunkptr chunk = mem2chunk(pointer);

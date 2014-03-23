@@ -54,7 +54,7 @@ static void visit_object(void* start_obj) {
         for (i = 1; i <= num; ++i) {
             num_ptr++;
             int* res = (int *) (ptr + *num_ptr);
-            graph_write(ptr, (void*)*res, file_out);
+            //graph_write(ptr, (void*)*res, file_out);
             if (*res && !get_mark(*res)) {
                 mark(*res);
                 push((void*)*res);
@@ -64,7 +64,7 @@ static void visit_object(void* start_obj) {
 }
 
 static void gc_mark() {
-	file_out = graph_init("graph.gv");
+	//file_out = graph_init("graph.gv");
     chain* current = chainBottom;
     while (current) {
     	int* pmetadata = current->meta;
@@ -86,7 +86,7 @@ static void gc_mark() {
             obj = stack_is_full();            
         }    
     }
-	graph_delete(file_out);
+	//graph_delete(file_out);
 }
 
 

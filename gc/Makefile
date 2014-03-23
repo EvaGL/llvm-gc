@@ -10,13 +10,18 @@ gc.o: gc.c gc.h graph.h mark.h
 graph.o: graph.c graph.h
 	gcc -g -c -fpic graph.c
 
-tests: test test_cycle test_sweep
+tests: test test_cycle test_sweep test_autocall
 
 test_sweep: test_sweep.c
 	gcc -g -o test_sweep test_sweep.c -L. -ljblab-gc
 
+test_autocall: test_autocall.ll
+	llvm-as < test_autocall.ll | llc -load=/home/liana/progs/llvm/build/lib/jblab-gc.so > test_autocall.s
+	gcc -o test_autocall test_autocall.s -L. -ljblab-gc
+	rm test_autocall.s
+
 test: test.ll
-	llvm-as < test.ll | llc -load=jblab-gc.so > test.s
+	llvm-as < test.ll | llc -load=/home/liana/progs/llvm/build/lib/jblab-gc.so > test.s
 	gcc -o test test.s -L. -ljblab-gc
 	rm test.s
 
@@ -26,6 +31,5 @@ test_cycle: test_cycle.ll
 	rm test.s
 
 clean:
-	rm -f *.o *.so test test_cycle test_sweep 
-	rm graph.ps graph.gv
+	rm -f *.o *.so test test_cycle test_sweep test_autocall 
 	
