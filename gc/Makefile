@@ -5,7 +5,7 @@ malloc.o: malloc.c mark.h
 	gcc -g -c -fpic malloc.c
 
 gc.o: gc.c gc.h graph.h mark.h
-	gcc -g -c gc.c -fpic
+	gcc -g -c gc.c -I/usr/local/lib/ocaml -fpic
 
 graph.o: graph.c graph.h
 	gcc -g -c -fpic graph.c

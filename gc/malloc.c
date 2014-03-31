@@ -1466,7 +1466,7 @@ DLMALLOC_EXPORT int mspace_mallopt(int, int);
 #ifndef assert
 #define assert(x)
 #endif
-#define DEBUG 0
+#define DEBUG 1
 #endif /* DEBUG */
 #if !defined(WIN32) && !defined(LACKS_TIME_H)
 #include <time.h>        /* for magic initialization */
@@ -6342,16 +6342,25 @@ DLMALLOC_EXPORT void* malloc_wrapped(size_t size) {
 
 DLMALLOC_EXPORT void mark(void* pointer) {
   mchunkptr chunk = mem2chunk(pointer);
+  mstate m = gm;
+  printf("mark chunk %p\n", chunk);
+  /*do_check_any_chunk(m, chunk);*/
   set_flag4(chunk);
 }
 
 DLMALLOC_EXPORT void unmark(void* pointer) {
   mchunkptr chunk = mem2chunk(pointer);
+  mstate m = gm;
+  printf("unmark chunk %p\n", chunk);
+  /*do_check_any_chunk(m, chunk);*/
   clear_flag4(chunk); 
 }
 
 DLMALLOC_EXPORT size_t get_mark(void* pointer) {
   mchunkptr chunk = mem2chunk(pointer);
+  mstate m = gm;
+  printf("get mark chunk %p\n", chunk);
+  /*do_check_any_chunk(m, chunk);*/
   return flag4inuse(chunk);
 }
 
@@ -6408,5 +6417,45 @@ DLMALLOC_EXPORT void* stack_is_full() {
     }
     return NULL;
   }
+}
+
+DLMALLOC_EXPORT size_t go_along_heap() {
+/*This function is copy-paste from function "traverse_and_check" */
+  mstate m = gm;
+  size_t sum = 0;
+  if (is_initialized(m)) {
+    msegmentptr s = &m->seg;
+    sum += m->topsize + TOP_FOOT_SIZE;
+    while (s != 0) {
+      mchunkptr q = align_as_chunk(s->base);
+      mchunkptr lastq = 0;
+      assert(pinuse(q));
+      while (segment_holds(s, q) &&
+             q != m->top && q->head != FENCEPOST_HEAD) {
+	printf("chunk %p\n", q);
+        sum += chunksize(q);
+        if (is_inuse(q)) {
+          assert(!bin_find(m, q));
+          do_check_inuse_chunk(m, q);
+        }
+        else {
+          assert(q == m->dv || bin_find(m, q));
+          assert(lastq == 0 || is_inuse(lastq)); /* Not 2 consecutive free */
+          do_check_free_chunk(m, q);
+        }
+        lastq = q;
+        q = next_chunk(q);
+      }
+      s = s->next;
+    }
+  }
+  return sum;
+
+}
+
+
+DLMALLOC_EXPORT char address_ok(void* addr) {
+    mstate m = gm;  
+    return ok_address(m, addr);
 }
 
