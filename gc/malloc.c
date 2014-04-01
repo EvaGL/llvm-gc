@@ -760,7 +760,8 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 */
 
 /* #define HAVE_USR_INCLUDE_MALLOC_H */
-
+#include <pthread.h>
+#include <time.h>
 #ifdef HAVE_USR_INCLUDE_MALLOC_H
 #include "/usr/include/malloc.h"
 #else /* HAVE_USR_INCLUDE_MALLOC_H */
@@ -820,13 +821,29 @@ extern "C" {
 
 /* ------------------- Declarations of public routines ------------------- */
 
+#define SPACE_BASED 0
+#define TIMED 1
+#define NO_SPACE 2
+
+// Uncomment one of this lines to declare malloc wrapper
+// #define MALLOC_WRAPPER TIMED
+// #define MALLOC_WRAPPER NO_SPACE
+// #define MALLOC_WRAPPER SPACE_BASED
+
 #ifndef USE_DL_PREFIX
 #define dlcalloc               calloc
 #define dlfree                 free
   #ifndef DLMALLOC_WRAPPED
     #define dlmalloc           malloc
   #else
-    #define malloc_wrapped     malloc
+    #if MALLOC_WRAPPER == NO_SPACE
+      #define no_space_malloc malloc
+    #elif MALLOC_WRAPPER == TIMED
+      #define timed_malloc malloc
+    #else
+      // default
+      #define space_based_malloc malloc
+    #endif
 #endif
 #define dlmemalign             memalign
 #define dlposix_memalign       posix_memalign
@@ -865,7 +882,9 @@ extern "C" {
 */
 
 void* constMoreCore(int);
-void* malloc_wrapped(size_t);
+void* malloc_space_based(size_t);
+void* timed_malloc(size_t);
+void* no_space_malloc(size_t);
 void gc();
 
 DLMALLOC_EXPORT void* dlmalloc(size_t);
@@ -6301,7 +6320,7 @@ History:
 /* Custom MORECORE */
 
 
-const int HEAP_SIZE = 4096; // 40mb
+const int HEAP_SIZE = 4096*10; // 40mb
 static int morecore_was_used = 0;
 static void *sbrk_top = 0;
 
@@ -6323,11 +6342,15 @@ DLMALLOC_EXPORT void* constMoreCore(int size) {
   return ptr;
 }
 
-DLMALLOC_EXPORT void* malloc_wrapped(size_t size) {
+
+DLMALLOC_EXPORT void* no_space_malloc(size_t size) {
   if (size == 0) {
   	return NULL;
   }
-  printf("malloc_wrapped invoked, size = %d ", size);
+  printf("malloc_wrapped invoked, size = %d\n ", size);
+  printf("==total allocated space = %d\n", mallinfo().uordblks);
+  printf("==total free space = %d\n", mallinfo().fordblks);
+  printf("==total space = %d\n", mallinfo().usmblks);
   void* res = dlmalloc(size);
   if (res) {
     printf("address = %p\n", res);
@@ -6338,6 +6361,92 @@ DLMALLOC_EXPORT void* malloc_wrapped(size_t size) {
   void* p =  dlmalloc(size);
   printf("address = %p\n", p);
   return p; 
+}
+
+static double threshold = 0.5;
+DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
+  if (size == 0) {
+    return NULL;
+  }
+  struct mallinfo inf = mallinfo();
+  int allocated_size = inf.uordblks;
+  int total_size = inf.usmblks;
+  printf("malloc_wrapped invoked, size = %d\n", size);
+  printf("==total allocated space = %d\n", allocated_size);
+  printf("==total space = %d\n", total_size);
+  if ((allocated_size < threshold * total_size) || (allocated_size == 0)) {
+    void* res = dlmalloc(size);
+    printf("address = %p\n", res);
+    if (res) {
+      return res;
+    }
+  }
+  printf("==gc invoked\n");
+  gc();
+  void* p =  dlmalloc(size);
+  printf("address = %p\n", p);
+  return p; 
+}
+
+
+pthread_mutex_t mutex_count;
+static int ifCreateCounterThread = 1;
+static pthread_t threads[1];
+struct timespec prev_malloc_invokation;
+struct timespec last_malloc_invokation;
+struct timespec getDiffTime(struct timespec t, struct timespec l) {
+    struct timespec tmp;
+    if (t.tv_nsec == -1 || l.tv_nsec == -1) {
+      tmp.tv_sec = 0;
+      tmp.tv_nsec = 0;
+    }
+    tmp.tv_sec = t.tv_sec - l.tv_sec;
+    tmp.tv_nsec = t.tv_nsec - l.tv_nsec;
+    if (tmp.tv_nsec < 0) {
+      tmp.tv_sec--;
+      tmp.tv_nsec += 1000000;
+    }
+    return tmp;
+}
+
+
+void *counter() {
+  while (1) {
+    struct timespec diff = getDiffTime(last_malloc_invokation, prev_malloc_invokation); 
+    printf("===%ld sec %ld nsec\n", diff.tv_sec, diff.tv_nsec);
+    if (diff.tv_sec > 1) {
+      pthread_mutex_lock (&mutex_count);
+      gc();
+      pthread_mutex_unlock (&mutex_count);
+    }   
+  }
+}
+
+
+void init_time(struct timespec t) {
+  t.tv_sec = -1;
+  t.tv_nsec = -1;
+}
+
+DLMALLOC_EXPORT void* timed_malloc(size_t size) {
+  if (ifCreateCounterThread) {
+    ifCreateCounterThread = 0;
+    init_time(prev_malloc_invokation);
+    init_time(last_malloc_invokation);
+    pthread_mutex_init(&mutex_count, NULL);
+    pthread_create(&threads[0], NULL, counter, NULL);
+  }
+  if (size == 0) {
+    return NULL;
+  }
+  pthread_mutex_lock (&mutex_count);
+  prev_malloc_invokation = last_malloc_invokation;
+  clock_gettime(CLOCK_REALTIME, &last_malloc_invokation);
+  pthread_mutex_unlock (&mutex_count);
+  printf("malloc_wrapped invoked, size = %d\n", size);
+  void* res = dlmalloc(size);
+  printf("address = %p\n", res);
+  return res;
 }
 
 DLMALLOC_EXPORT void mark(void* pointer) {
