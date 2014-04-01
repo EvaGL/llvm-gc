@@ -6442,9 +6442,19 @@ DLMALLOC_EXPORT void* timed_malloc(size_t size) {
   pthread_mutex_lock (&mutex_count);
   prev_malloc_invokation = last_malloc_invokation;
   clock_gettime(CLOCK_REALTIME, &last_malloc_invokation);
-  pthread_mutex_unlock (&mutex_count);
   printf("malloc_wrapped invoked, size = %d\n", size);
+  pthread_mutex_unlock (&mutex_count);
   void* res = dlmalloc(size);
+  printf("address = %p\n", res);
+  if (res) {
+    return res;
+  }
+  pthread_mutex_lock (&mutex_count);
+  gc();
+  prev_malloc_invokation = last_malloc_invokation;
+  clock_gettime(CLOCK_REALTIME, &last_malloc_invokation);
+  res = dlmalloc(size);
+  pthread_mutex_unlock (&mutex_count);
   printf("address = %p\n", res);
   return res;
 }
