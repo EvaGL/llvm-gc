@@ -25,7 +25,7 @@ static show_stack() {
 }
 
 static void push(void* obj) {
-    printf("end = %d\n", end);
+    printf("push %p\n", obj);
     if (end == N) {
         printf("Panic! Stack is full!\n");
         STACK_IS_FULL = 1;
@@ -38,6 +38,7 @@ static void push(void* obj) {
 static void* pop() { 
     end--;
     void* val = my_stack[end];
+    printf("pop %p\n", val);
     my_stack[end] = NULL;
     return val;
 }
@@ -66,76 +67,108 @@ static void* pop() {
 }
 */
 
-
 static char checked_address(value* addr) {
+    if (!addr) {
+        printf("null object\n");
+        return 0;
+    }
+    if (!address_ok(addr) || (addr > (1ull << 62))) {
+        printf("address is not in heap\n");            
+        return 0;    
+    }        
+    if (get_mark(Hp_val(Val_op(addr)))) {
+        printf("already marked\n");
+        return 0;
+    }
+    return 1;
+}
+
+static char correct_block(value* addr) {
     if (!Is_block(Val_op(addr))) {
-        printf("bad object %p\n", Op_val(addr));
+        printf("not block %p\n", Op_val(addr));
         return 0;            
     }
     if (!addr) {
         printf("null object\n");
         return 0;
     }
-    /*Terrible code!!!!*/
-    if (addr > 0xfffffffff) {
-        printf("big number\n");
-        return 0;
-    }
-    if (!address_ok(addr)) {
-        printf("address is not in heap\n");            
-        return 0;    
-    }
-    if (get_mark(Hp_val(Val_op(addr)))) {
-        printf("already marked\n");
-        return 0;
-    }
-    header_t header = Hd_val(Val_op(addr));
+    return 1;    
+}
+
+static char should_scan(value* ptr) {
+    header_t header = Hd_val(Val_op(ptr));
     tag_t tag = Tag_hd(header);
-	printf("Tag: %d\n", tag);
     if (tag >= No_scan_tag) {
-        printf("bad tag for object %p\n", addr);            
+        printf("bad tag for object %p\n", ptr);
         return 0;        
-    }
+    }    
     return 1;
 }
 
+static mlsize_t get_size(value val) {
+    header_t header = Hd_val(val);
+    mlsize_t size = Wosize_hd(header);
+    printf("object %p size %d\n", Op_val(val), size);
+    return size;    
+}
+
+static tag_t get_tag(value val) {
+    header_t header = Hd_val(val);
+    tag_t tag = Tag_hd(header);
+    printf("object %p tag  %d\n", Op_val(val), tag);
+    return tag;    
+}
 
 static void visit_object(value* start_obj) {
-    printf("start object: %p\n", start_obj);  
-    if (!checked_address(Op_val(start_obj))) {
+    printf("-------------\n");
+    printf("start object: %p\n", start_obj);
+    printf("-------------\n");    
+    if (!correct_block(start_obj)) {
         return;    
     }
-    value start_obj_val = Val_op(start_obj);
+    if (!should_scan(start_obj)) {
+        /*we shouldn't scan this object and its fields, but it is alive*/
+        if (checked_address(start_obj)) {
+            mark(Hp_val(Val_op(start_obj)));
+        }
+        return;        
+    }
     push(start_obj);
 
     while (end != 0) {
-        value ptr = Val_op(pop());
-        printf("object: %p\n", Op_val(ptr));
-        
-        mark(Hp_val(ptr));
-        header_t header = Hd_val(ptr);
-        
-        mlsize_t size = Wosize_hd(header);
-        printf("size is %d\n", size);
-        mlsize_t i;
-        for (i = 0; i < size; ++i) {
-            
-            value* res = &Field(ptr, i);
-            printf("Field #%d for object %p is %p\n", i, Op_val(ptr), res);
-            
-            header_t header = Hd_val(Val_op(res));
-            tag_t tag = Tag_hd(header);
-	        printf("tag for obj %p: %d\n", res, tag);
+        /*while stack is not empty*/
+        value v = Val_op(pop());
+        printf("object: %p\n", Op_val(v));
+        if (checked_address(Op_val(v))) {
+            /*ptr belongs to heap*/
+            mark(Hp_val(v));
+        } else {
+            continue;
+        }
+        if (!should_scan(Op_val(v))) {
+            continue;        
+        }
 
-            if (!checked_address(res)) {
-                continue;
+        mlsize_t size = get_size(v);
+        tag_t tag = get_tag(v);
+        mlsize_t i = 0;
+        if (tag == Closure_tag) {
+            /*thin place FIXME*/
+            printf("closure\n");
+            i = 3;        
+        }  
+	    while (i < size) {    
+            /*visit fields*/
+            value res = Field(v, i);
+            printf("Field #%d for object %p is %p\n", i, Op_val(v), Op_val(res));
+            if (correct_block(Op_val(res))) {                
+                push(Op_val(res));    
             }
+            ++i;
             /*graph_write((void*)Op_val(ptr), (void*)Op_val(res), file_out);*/
-            push(res);
         }
     }
 }
-
 
 
 static void gc_mark() {
@@ -145,11 +178,17 @@ static void gc_mark() {
     	int* pmetadata = current->meta;
         void* currentPtr = current;
     	int pointerNumbers = *pmetadata;
-        printf("%d\n", pointerNumbers);
+        printf("Root objects: %d\n", pointerNumbers);
 		int i;
         for (i = 1; i <= pointerNumbers; ++i) {
-			visit_object(*((void **)(currentPtr + *(pmetadata + i))));
-		}
+            void* ptr = *((void **)(currentPtr + *(pmetadata + i)));
+            if ((ptr > (1ull << 62)) || (ptr > 0x7f0000000)) {
+                /* dirty hack FIXME*/
+			    printf("Skip root object %p\n", ptr);
+            } else {
+                visit_object(ptr);            
+            }	
+        }
         current = current->parent;
 	}
     if (STACK_IS_FULL) {
@@ -166,7 +205,10 @@ static void gc_mark() {
 
 
 void gc() {
+    printf("===============GC Call================\n");
+    malloc_stats();
     go_along_heap();
     gc_mark();
     sweep();
+    malloc_stats();
 }

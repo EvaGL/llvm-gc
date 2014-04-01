@@ -6432,9 +6432,9 @@ DLMALLOC_EXPORT size_t go_along_heap() {
       assert(pinuse(q));
       while (segment_holds(s, q) &&
              q != m->top && q->head != FENCEPOST_HEAD) {
-	printf("chunk %p\n", q);
-        sum += chunksize(q);
+	sum += chunksize(q);
         if (is_inuse(q)) {
+	  printf("chunk %p\n", q);
           assert(!bin_find(m, q));
           do_check_inuse_chunk(m, q);
         }
