@@ -31,6 +31,9 @@ namespace {
             chainPtr = PointerType::getUnqual(chainType);
             
             for(Module::iterator F = M.begin(); F != M.end(); ++F) {
+                if (F->getName() == "main") {
+                    F->setGC("jblab-gc");
+                }
                 if (F->hasGC() && strcmp(F->getGC(), "jblab-gc") == 0) {
                     // Creating stack map for functions
                     M.getOrInsertGlobal("__gc_" + (std::string) F->getName(), intType);
@@ -59,7 +62,8 @@ namespace {
             // Push previous chain instance
             GetElementPtrInst* prevPtr = GetElementPtrInst::Create(chain, secondElem, "prev_ptr", first);
             Value* chainBottom = F.getParent()->getOrInsertGlobal("chainBottom", chainPtr);
-            BitCastInst* cast = new BitCastInst(chainBottom, voidPtr, "prev_void_ptr", first);
+            LoadInst* chainBottomValue = new LoadInst(chainBottom, "chainBottomValue", first);
+            BitCastInst* cast = new BitCastInst(chainBottomValue, voidPtr, "prev_void_ptr", first);
             if (F.getName() != "main") {
                 StoreInst* storePrev = new StoreInst(cast, prevPtr, first);
             } else {
@@ -77,10 +81,12 @@ namespace {
                     continue;
                 }
                 if (isa<ReturnInst>(term) || isa<ResumeInst>(term)) {
-                    BitCastInst* prevCast = new BitCastInst(prevPtr, chainPtr, "parent", term);
-                    StoreInst* restore = new StoreInst(prevCast, chainBottom, term);
+                    LoadInst* parent = new LoadInst(prevPtr, "parent", term);
+                    BitCastInst* parentCast = new BitCastInst(parent, chainPtr, "parentCast", term);
+                    StoreInst* restore = new StoreInst(parentCast, chainBottom, term);
                 }
             }
+            // TODO: Make proper restore in exception handling
             return true;
         }
     };
