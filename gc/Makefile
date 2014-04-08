@@ -1,5 +1,5 @@
 libjblab-gc.so: gc.o malloc.o graph.o 
-	gcc -g -shared -fpic graph.o gc.o malloc.o -o libjblab-gc.so
+	gcc -g -shared -fpic graph.o gc.o malloc.o -o libjblab-gc.so -lpthread -lrt
 
 malloc.o: malloc.c mark.h
 	gcc -g -c -fpic malloc.c
