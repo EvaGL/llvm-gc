@@ -524,10 +524,12 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 /* Version identifier to allow people to support multiple versions */
 
 
+
 #define DLMALLOC_WRAPPED
 #define MORECORE constMoreCore
 #define MORECORE_CANNOT_TRIM
-
+#define PAGESIZE 256*1024
+#define malloc_getpagesize PAGESIZE
 #define HAVE_MMAP 0
 
 #ifndef DLMALLOC_VERSION
@@ -6320,7 +6322,7 @@ History:
 /* Custom MORECORE */
 
 
-const int HEAP_SIZE = 4096*10; // 40mb
+const int HEAP_SIZE = PAGESIZE;
 static int morecore_was_used = 0;
 static void *sbrk_top = 0;
 

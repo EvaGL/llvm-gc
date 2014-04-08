@@ -92,6 +92,10 @@ static char correct_block(value* addr) {
         printf("null object\n");
         return 0;
     }
+    if (addr < 0x100 || (addr > sbrk(0) && addr < 0x7f0000000)) {
+        printf("probably segfault, skip. %p\n", addr);
+	return 0;
+    }
     return 1;    
 }
 
