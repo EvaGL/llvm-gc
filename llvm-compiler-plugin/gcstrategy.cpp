@@ -53,11 +53,18 @@ namespace {
             
             // Allocating space for chain instance on stack
             AllocaInst* chain = new AllocaInst(chainType,"chain", first);
+            
 
             // Push metadata pointer
             GetElementPtrInst* metaPtr = GetElementPtrInst::Create(chain, firstElem, "meta_ptr", first);
             Value* meta = F.getParent()->getOrInsertGlobal("__gc_" + (std::string) F.getName(), intType);
             StoreInst* storeMeta = new StoreInst(meta, metaPtr, first);
+            
+            Function* gcroot = Intrinsic::getDeclaration(F.getParent(), Intrinsic::gcroot);
+            Value* gcrootParams[2] = {new BitCastInst(chain, PointerType::getUnqual(voidPtr), "chainCast" ,first), 
+                meta};
+            CallInst* makeRoot = CallInst::Create(gcroot, gcrootParams);
+            makeRoot->insertBefore(first);
             
             // Push previous chain instance
             GetElementPtrInst* prevPtr = GetElementPtrInst::Create(chain, secondElem, "prev_ptr", first);

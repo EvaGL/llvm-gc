@@ -29,14 +29,18 @@ namespace {
                 os.EmitLabel(label);
                 ap.EmitInt32(info.roots_size());
                 size_t frameSize = info.getFrameSize();
+                size_t chain = 1000000000;
                 for (GCFunctionInfo::roots_iterator root = info.roots_begin(); root != info.roots_end(); ++root) {
                     int stackOffset = root->StackOffset;
-                    if (stackOffset >= 0) {
-                        stackOffset = stackOffset - (frameSize - 2 * ptrSize); 
-                    } else {
-		        stackOffset = stackOffset + 3 * ptrSize; // + rbp
-		    }
-                    ap.EmitInt32(stackOffset);
+                    if (stackOffset < chain) {
+                        chain = stackOffset;
+                    }
+                }
+                for (GCFunctionInfo::roots_iterator root = info.roots_begin(); root != info.roots_end(); ++root) {
+                    int stackOffset = root->StackOffset - chain;
+                    if (stackOffset != 0) {
+                        ap.EmitInt32(stackOffset);
+                    }
                 }
             }
         }
