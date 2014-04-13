@@ -4,7 +4,7 @@
 #include <caml/mlvalues.h>
 
 
-#define N 100
+#define N 30000
 static void* my_stack[N];
 static int end = 0;
 static FILE* file_out;
@@ -84,6 +84,10 @@ static char checked_address(value* addr) {
 }
 
 static char correct_block(value* addr) {
+    if (Op_val(addr) < 0x10000) {
+        printf("too small %p\n", Op_val(addr));
+        return 0;
+    }
     if (!Is_block(Val_op(addr))) {
         printf("not block %p\n", Op_val(addr));
         return 0;            
@@ -155,7 +159,7 @@ static void visit_object(value* start_obj) {
         if (tag == Closure_tag) {
             /*thin place FIXME*/
             printf("closure\n");
-            i = 3;        
+            i = 1;        
         }  
 	    while (i < size) {    
             /*visit fields*/
