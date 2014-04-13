@@ -27,20 +27,16 @@ namespace {
                 ap.EmitAlignment(align);
                 MCSymbol *label = os.getContext().GetOrCreateSymbol("__gc_" + info.getFunction().getName());
                 os.EmitLabel(label);
-                ap.EmitInt32(info.roots_size());
+                ap.EmitInt32(info.roots_size() - 1);
                 size_t frameSize = info.getFrameSize();
-                size_t chain = 1000000000;
+                size_t chain = -1;
                 for (GCFunctionInfo::roots_iterator root = info.roots_begin(); root != info.roots_end(); ++root) {
                     int stackOffset = root->StackOffset;
-                    if (stackOffset < chain) {
+                    if (chain == -1) {
                         chain = stackOffset;
+                        continue;
                     }
-                }
-                for (GCFunctionInfo::roots_iterator root = info.roots_begin(); root != info.roots_end(); ++root) {
-                    int stackOffset = root->StackOffset - chain;
-                    if (stackOffset != 0) {
-                        ap.EmitInt32(stackOffset);
-                    }
+                    ap.EmitInt32(stackOffset - chain);
                 }
             }
         }
