@@ -826,7 +826,7 @@ extern "C" {
 #define NO_SPACE 2
 
 // Uncomment one of this lines to declare malloc wrapper
-// #define MALLOC_WRAPPER TIMED
+#define MALLOC_WRAPPER TIMED
 // #define MALLOC_WRAPPER NO_SPACE
 // #define MALLOC_WRAPPER SPACE_BASED
 
@@ -6316,12 +6316,11 @@ History:
 
 */
 
-
 /* Custom MORECORE */
 
 
-const int HEAP_SIZE = 4096*10; // 40mb
-static int morecore_was_used = 0;
+const int HEAP_SIZE = 100*4096; 
+int HEAP_USED = 0;
 static void *sbrk_top = 0;
 
 DLMALLOC_EXPORT void* constMoreCore(int size) {
@@ -6329,16 +6328,16 @@ DLMALLOC_EXPORT void* constMoreCore(int size) {
   if (size == 0) {
     return sbrk_top;
   }
-  if (size < 0 || size > HEAP_SIZE || morecore_was_used) {
+  if (size < 0 || HEAP_USED + size > HEAP_SIZE) {
     printf("baaaaaad request\n");
     return MFAIL;
   }
-  void* ptr = MORECORE_DEFAULT(HEAP_SIZE);
+  void* ptr = MORECORE_DEFAULT(size);
   if (ptr == 0 || ptr == MFAIL) {
     return MFAIL;
   }
-  sbrk_top = ((char*)ptr) + HEAP_SIZE;
-  morecore_was_used = 1;
+  HEAP_USED += size;
+  sbrk_top = ((char*)ptr) + size;
   return ptr;
 }
 
@@ -6370,7 +6369,7 @@ DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
   }
   struct mallinfo inf = mallinfo();
   int allocated_size = inf.uordblks;
-  int total_size = inf.usmblks;
+  int total_size = HEAP_SIZE;
   printf("malloc_wrapped invoked, size = %d\n", size);
   printf("==total allocated space = %d\n", allocated_size);
   printf("==total space = %d\n", total_size);
