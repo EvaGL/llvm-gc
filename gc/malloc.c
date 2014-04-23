@@ -1,6 +1,5 @@
 /*
   This is a version (aka dlmalloc) of malloc/free/realloc written by
-  Doug Lea and released to the public domain, as explained at
   http://creativecommons.org/publicdomain/zero/1.0/ Send questions,
   comments, complaints, performance data, etc to dl@cs.oswego.edu
 
@@ -527,6 +526,7 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 #define DLMALLOC_WRAPPED
 #define MORECORE constMoreCore
 #define MORECORE_CANNOT_TRIM
+#define MALLOC_ALIGNMENT ((size_t) (16))
 
 #define HAVE_MMAP 0
 
@@ -2283,8 +2283,9 @@ typedef unsigned int flag_t;           /* The type of various bit flag sets */
 #define PINUSE_BIT          (SIZE_T_ONE)
 #define CINUSE_BIT          (SIZE_T_TWO)
 #define FLAG4_BIT           (SIZE_T_FOUR)
+#define FLAG8_BIT           ((size_t) 8)
 #define INUSE_BITS          (PINUSE_BIT|CINUSE_BIT)
-#define FLAG_BITS           (PINUSE_BIT|CINUSE_BIT|FLAG4_BIT)
+#define FLAG_BITS           (PINUSE_BIT|CINUSE_BIT|FLAG4_BIT|FLAG8_BIT)
 
 /* Head value for fenceposts */
 #define FENCEPOST_HEAD      (INUSE_BITS|SIZE_T_SIZE)
@@ -2293,6 +2294,7 @@ typedef unsigned int flag_t;           /* The type of various bit flag sets */
 #define cinuse(p)           ((p)->head & CINUSE_BIT)
 #define pinuse(p)           ((p)->head & PINUSE_BIT)
 #define flag4inuse(p)       ((p)->head & FLAG4_BIT)
+#define flag8inuse(p)       ((p)->head & FLAG8_BIT)
 #define is_inuse(p)         (((p)->head & INUSE_BITS) != PINUSE_BIT)
 #define is_mmapped(p)       (((p)->head & INUSE_BITS) == 0)
 
@@ -2301,6 +2303,8 @@ typedef unsigned int flag_t;           /* The type of various bit flag sets */
 #define clear_pinuse(p)     ((p)->head &= ~PINUSE_BIT)
 #define set_flag4(p)        ((p)->head |= FLAG4_BIT)
 #define clear_flag4(p)      ((p)->head &= ~FLAG4_BIT)
+#define set_flag8(p)        ((p)->head |= FLAG8_BIT)
+#define clear_flag8(p)      ((p)->head &= ~FLAG8_BIT)
 
 /* Treat space at ptr +/- offset as a chunk */
 #define chunk_plus_offset(p, s)  ((mchunkptr)(((char*)(p)) + (s)))
@@ -6400,36 +6404,36 @@ DLMALLOC_EXPORT void* no_space_malloc(size_t size) {
 }
 
 static double threshold = 0.5;
-DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
-  if (size == 0) {
-    return NULL;
-  }
-  struct mallinfo inf = mallinfo();
-  int allocated_size = inf.uordblks;
-  print_invokation_debug("malloc_wrapped invoked, size = %d\n", size);
-  print_invokation_debug("total allocated space = %d\n", allocated_size);
-  print_invokation_debug("total space = %d\n", inf.uordblks + inf.fordblks);
-  if ((allocated_size + size < threshold * inf.uordblks + inf.fordblks) || (allocated_size == 0)) {
-    void* res = dlmalloc(size);
-    if (res) {
-      return res;
-    }
-  }
-  print_invokation_debug("gc invoked\n");
-  gc();
-  print_invokation_debug("gc finished\n");
-  void* p =  dlmalloc(size);
-  /*
-  while (!p) {
-    print_invokation_debug("need to expand the heap\n");
-    HEAP_SIZE += HEAP_SIZE;
-    print_invokation_debug("HEAP SIZE FROM MALLOC = %d", HEAP_SIZE);
-    p = dlmalloc(size);
-  }
-  */
-  return p; 
-}
 
+DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
+    if (size == 0) {
+        return NULL;
+    }
+    struct mallinfo inf = mallinfo();
+    int allocated_size = inf.uordblks;
+    print_invokation_debug("malloc_wrapped invoked, size = %d\n", size);
+    print_invokation_debug("total allocated space = %d\n", allocated_size);
+    print_invokation_debug("total space = %d\n", inf.uordblks + inf.fordblks);
+    int gc_invoked = 0;
+    if (allocated_size > threshold * (inf.uordblks + inf.fordblks) && HEAP_SIZE > 0) {
+        print_invokation_debug("gc invoked\n");
+        gc();
+        print_invokation_debug("gc finished\n");
+        gc_invoked = 1;
+    }
+    void* res = dlmalloc(size);
+    if (!res && !gc_invoked) {
+        print_invokation_debug("gc invoked\n");
+        gc();
+        print_invokation_debug("gc finished\n");
+    }
+    while (!res) {
+        print_invokation_debug("expanding heap\n");
+        HEAP_SIZE *= 2;
+        res = dlmalloc(size);
+    }
+    return res;
+}
 
 pthread_mutex_t mutex_count;
 static int ifCreateCounterThread = 1;
@@ -6536,9 +6540,8 @@ DLMALLOC_EXPORT size_t sweep() {
       while (segment_holds(s, q) &&
              q < m->top && q->head != FENCEPOST_HEAD) {
         //printf("chunk: %p\n", q);
-        if (!flag4inuse(q) && is_inuse(q)) {
+        if (flag8inuse(q) && !flag4inuse(q) && is_inuse(q)) {
             free(chunk2mem(q));
-            //printf("free that chunk\n");
         }
         if (q < m->top && q->head != FENCEPOST_HEAD) {
             clear_flag4(q);
@@ -6569,7 +6572,7 @@ DLMALLOC_EXPORT void* stack_is_full() {
       while (segment_holds(s, q) &&
              q < m->top && q->head != FENCEPOST_HEAD) {
         //printf("visit chunk: %p\n", q);
-        if (flag4inuse(q) && is_inuse(q)) {
+        if (flag8inuse(q) && flag4inuse(q) && is_inuse(q)) {
             return chunk2mem(q);            
         }
         if (q < m->top && q->head != FENCEPOST_HEAD) {
@@ -6622,3 +6625,11 @@ DLMALLOC_EXPORT char address_ok(void* addr) {
     return ok_address(m, addr);
 }
 
+
+DLMALLOC_EXPORT void* gcmalloc(size_t size) {
+    void* p = malloc(size);
+    if (p) {
+        set_flag8(mem2chunk(p));
+    }
+    return p;
+}

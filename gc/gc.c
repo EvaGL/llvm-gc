@@ -93,10 +93,6 @@ static char correct_block(value* addr) {
         //printf("not block %p\n", Op_val(addr));
         return 0;            
     }
-    if (!addr) {
-        //printf("null object\n");
-        return 0;
-    }
     return 1;    
 }
 
