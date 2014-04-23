@@ -6532,6 +6532,8 @@ DLMALLOC_EXPORT size_t get_mark(void* pointer) {
 }
 
 DLMALLOC_EXPORT size_t sweep() {
+  int sweeped = 0;
+  size_t size = 0;
   mstate m = gm;
   if (is_initialized(m)) {
     msegmentptr s = &m->seg;
@@ -6539,23 +6541,29 @@ DLMALLOC_EXPORT size_t sweep() {
       mchunkptr q = align_as_chunk(s->base);
       while (segment_holds(s, q) &&
              q < m->top && q->head != FENCEPOST_HEAD) {
-        //printf("chunk: %p\n", q);
+        mchunkptr n = next_chunk(q);
+        if (n < m->top && n->head != FENCEPOST_HEAD && !is_inuse(n)) {
+            n = next_chunk(n);
+        }
         if (flag8inuse(q) && !flag4inuse(q) && is_inuse(q)) {
+            sweeped++;
+            size += chunksize(q);
             free(chunk2mem(q));
         }
+
         if (q < m->top && q->head != FENCEPOST_HEAD) {
             clear_flag4(q);
-            q = next_chunk(q);
+            q = n;
         }
       }
       s = s->next;
     }
   }
+  print_invokation_debug("sweeped %d objects: %d bytes\n", sweeped, size);
 }
 
 static msegmentptr s = 0;
 static mchunkptr q = 0;
-
 
 DLMALLOC_EXPORT void* stack_is_full() {
   mstate m = gm;
@@ -6571,7 +6579,6 @@ DLMALLOC_EXPORT void* stack_is_full() {
     while (s != 0) {
       while (segment_holds(s, q) &&
              q < m->top && q->head != FENCEPOST_HEAD) {
-        //printf("visit chunk: %p\n", q);
         if (flag8inuse(q) && flag4inuse(q) && is_inuse(q)) {
             return chunk2mem(q);            
         }
@@ -6600,7 +6607,6 @@ DLMALLOC_EXPORT size_t go_along_heap() {
              q != m->top && q->head != FENCEPOST_HEAD) {
 	sum += chunksize(q);
         if (is_inuse(q)) {
-	  //printf("chunk %p\n", q);
           assert(!bin_find(m, q));
           do_check_inuse_chunk(m, q);
         }
@@ -6614,6 +6620,7 @@ DLMALLOC_EXPORT size_t go_along_heap() {
       }
       s = s->next;
     }
+  
   }
   return sum;
 
@@ -6625,9 +6632,11 @@ DLMALLOC_EXPORT char address_ok(void* addr) {
     return ok_address(m, addr);
 }
 
-
-DLMALLOC_EXPORT void* gcmalloc(size_t size) {
-    void* p = malloc(size);
+DLMALLOC_EXPORT gcmalloc(size_t s) {
+    if (s % MALLOC_ALIGNMENT != 0) {
+        s = s - (s % MALLOC_ALIGNMENT) + MALLOC_ALIGNMENT;
+    }
+    void* p = malloc(s);
     if (p) {
         set_flag8(mem2chunk(p));
     }
