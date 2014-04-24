@@ -3,7 +3,6 @@
 #include "mark.h"
 #include <caml/mlvalues.h>
 
-
 #define N 30000
 static void* my_stack[N];
 static int end = 0;
@@ -19,15 +18,15 @@ chain* chainBottom = NULL;
 static show_stack() {
     int i = 0;
     for (i = 0; i < N; ++i) {
-        //printf("%p ", my_stack[i]);        
+        MDEBUG("%p ", my_stack[i]);        
     }
-    //printf("\n");
+    MDEBUG("\n");
 }
 
 static void push(void* obj) {
-    //printf("push %p\n", obj);
+    MDEBUG("push %p\n", obj);
     if (end == N) {
-        //printf("Panic! Stack is full!\n");
+        MDEBUG("Panic! Stack is full!\n");
         STACK_IS_FULL = 1;
         return;    
     }
@@ -38,7 +37,7 @@ static void push(void* obj) {
 static void* pop() { 
     end--;
     void* val = my_stack[end];
-    //printf("pop %p\n", val);
+    MDEBUG("pop %p\n", val);
     my_stack[end] = NULL;
     return val;
 }
@@ -69,15 +68,15 @@ static void* pop() {
 
 static char checked_address(value* addr) {
     if (!addr) {
-        //printf("null object\n");
+        MDEBUG("null object\n");
         return 0;
     }
     if (!address_ok(addr) || (addr > (1ull << 62))) {
-        //printf("address is not in heap\n");            
+        MDEBUG("address is not in heap\n");            
         return 0;    
     }        
     if (get_mark(Hp_val(Val_op(addr)))) {
-        //printf("already marked\n");
+        MDEBUG("already marked\n");
         return 0;
     }
     return 1;
@@ -86,11 +85,11 @@ static char checked_address(value* addr) {
 extern void* heap_begin;
 static char correct_block(value* addr) {
     if (Op_val(addr) < heap_begin) {
-        //printf("too small %p\n", Op_val(addr));
+        MDEBUG("too small %p\n", Op_val(addr));
         return 0;
     }
     if (!Is_block(Val_op(addr))) {
-        //printf("not block %p\n", Op_val(addr));
+        MDEBUG("not block %p\n", Op_val(addr));
         return 0;            
     }
     return 1;    
@@ -100,7 +99,7 @@ static char should_scan(value* ptr) {
     header_t header = Hd_val(Val_op(ptr));
     tag_t tag = Tag_hd(header);
     if (tag >= No_scan_tag) {
-        //printf("bad tag for object %p\n", ptr);
+        MDEBUG("bad tag for object %p\n", ptr);
         return 0;        
     }    
     return 1;
@@ -109,21 +108,21 @@ static char should_scan(value* ptr) {
 static mlsize_t get_size(value val) {
     header_t header = Hd_val(val);
     mlsize_t size = Wosize_hd(header);
-    //printf("object %p size %d\n", Op_val(val), size);
+    MDEBUG("object %p size %d\n", Op_val(val), size);
     return size;    
 }
 
 static tag_t get_tag(value val) {
     header_t header = Hd_val(val);
     tag_t tag = Tag_hd(header);
-    //printf("object %p tag  %d\n", Op_val(val), tag);
+    MDEBUG("object %p tag  %d\n", Op_val(val), tag);
     return tag;    
 }
 
 static void visit_object(value* start_obj) {
-    //printf("-------------\n");
-    //printf("start object: %p\n", start_obj);
-    //printf("-------------\n");    
+    MDEBUG("-------------\n");
+    MDEBUG("start object: %p\n", start_obj);
+    MDEBUG("-------------\n");    
     if (!correct_block(start_obj)) {
         return;    
     }
@@ -139,7 +138,7 @@ static void visit_object(value* start_obj) {
     while (end != 0) {
         /*while stack is not empty*/
         value v = Val_op(pop());
-        //printf("object: %p\n", Op_val(v));
+        MDEBUG("object: %p\n", Op_val(v));
         if (checked_address(Op_val(v))) {
             /*ptr belongs to heap*/
             mark(Hp_val(v));
@@ -154,14 +153,13 @@ static void visit_object(value* start_obj) {
         tag_t tag = get_tag(v);
         mlsize_t i = 0;
         if (tag == Closure_tag) {
-            /*thin place FIXME*/
-            //printf("closure\n");
+            MDEBUG("closure\n");
             i = 1;        
         }  
         while (i < size) {    
             /*visit fields*/
             value res = Field(v, i);
-            //printf("Field #%d for object %p is %p\n", i, Op_val(v), Op_val(res));
+            MDEBUG("Field #%d for object %p is %p\n", i, Op_val(v), Op_val(res));
             if (correct_block(Op_val(res))) {                
                 push(Op_val(res));    
             }
@@ -179,13 +177,13 @@ static void gc_mark() {
         int* pmetadata = current->meta;
         void* currentPtr = current;
         int pointerNumbers = *pmetadata;
-        //printf("Root objects: %d\n", pointerNumbers);
+        MDEBUG("Root objects: %d\n", pointerNumbers);
         int i;
         for (i = 1; i <= pointerNumbers; ++i) {
             void* ptr = *((void **)(currentPtr + *(pmetadata + i)));
             if ((ptr > (1ull << 62)) || (ptr > 0x7f0000000)) {
                 /* dirty hack FIXME*/
-                //printf("Skip root object %p\n", ptr);
+                MDEBUG("Skip root object %p\n", ptr);
             } else {
                 visit_object(ptr);            
             }   
@@ -195,7 +193,7 @@ static void gc_mark() {
     if (STACK_IS_FULL) {
         STACK_IS_FULL = 0;
         void* obj = stack_is_full();
-        //printf("%p\n", obj);
+        MDEBUG("%p\n", obj);
         while (obj) {
             visit_object(obj);
             obj = stack_is_full();            
@@ -206,11 +204,11 @@ static void gc_mark() {
 
 
 void gc() {
-    //printf("===============GC Call================\n");
-    malloc_stats();
-    go_along_heap();
+    MDEBUG("===============GC Call================\n");
+    //malloc_stats();
+    //go_along_heap();
     gc_mark();
     sweep();
-    malloc_stats();
-    //printf("===============GC Call END================\n");
+    //malloc_stats();
+    MDEBUG("===============GC Call END================\n");
 }
