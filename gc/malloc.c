@@ -6336,6 +6336,9 @@ DLMALLOC_EXPORT void print_invokation_debug(const char * format, ...) {
   } else {
     va_list args;
     va_start (args, format);
+    struct timeval curtime;
+    gettimeofday(&curtime, NULL);
+    fprintf(stderr, "%d sec %d usec::", curtime.tv_sec, curtime.tv_usec);
     vfprintf (stderr, format, args);
     va_end (args);
   }
@@ -6415,7 +6418,7 @@ DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
     print_invokation_debug("total allocated space = %d\n", allocated_size);
     print_invokation_debug("total space = %d\n", inf.uordblks + inf.fordblks);
     int gc_invoked = 0;
-    if (allocated_size > threshold * (inf.uordblks + inf.fordblks) && HEAP_SIZE > 0) {
+    if (allocated_size > threshold * HEAP_SIZE && HEAP_SIZE > 0) {
         print_invokation_debug("gc invoked\n");
         gc();
         print_invokation_debug("gc finished\n");
@@ -6435,76 +6438,69 @@ DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
     return res;
 }
 
-pthread_mutex_t mutex_count;
-static int ifCreateCounterThread = 1;
-static pthread_t threads[1];
-struct timespec prev_malloc_invokation;
-struct timespec last_malloc_invokation;
-struct timespec getDiffTime(struct timespec t, struct timespec l) {
-    struct timespec tmp;
-    if (t.tv_nsec == -1 || l.tv_nsec == -1) {
+struct timeval prev_malloc_invokation = {-1, -1};
+struct timeval prev_prev_malloc_invokation = {-1, -1};
+//prev_malloc_invokation.tv_sec = -1; 
+//prev_malloc_invokation.tv_nsec = -1;
+
+struct timeval getDiffTime(struct timeval t, struct timeval l) {
+    struct timeval tmp;
+    if (t.tv_usec == -1 || l.tv_usec == -1) {
       tmp.tv_sec = 0;
-      tmp.tv_nsec = 0;
+      tmp.tv_usec = 0;
     }
     tmp.tv_sec = t.tv_sec - l.tv_sec;
-    tmp.tv_nsec = t.tv_nsec - l.tv_nsec;
-    if (tmp.tv_nsec < 0) {
+    tmp.tv_usec = t.tv_usec - l.tv_usec;
+    if (tmp.tv_usec < 0) {
       tmp.tv_sec--;
-      tmp.tv_nsec += 1000000;
+      tmp.tv_usec += 1000000;
     }
     return tmp;
 }
 
 
-void *counter() {
-  while (1) {
-    struct timespec diff = getDiffTime(last_malloc_invokation, prev_malloc_invokation); 
-    printf("===%ld sec %ld nsec\n", diff.tv_sec, diff.tv_nsec);
-    if (diff.tv_sec > 1) {
-      pthread_mutex_lock (&mutex_count);
-      print_invokation_debug("gc invoked\n");
-      gc();
-      print_invokation_debug("gc finished\n");
-      pthread_mutex_unlock (&mutex_count);
-    }   
-  }
-}
-
-
-void init_time(struct timespec t) {
-  t.tv_sec = -1;
-  t.tv_nsec = -1;
-}
-
 DLMALLOC_EXPORT void* timed_malloc(size_t size) {
-  if (ifCreateCounterThread) {
-    ifCreateCounterThread = 0;
-    init_time(prev_malloc_invokation);
-    init_time(last_malloc_invokation);
-    pthread_mutex_init(&mutex_count, NULL);
-    pthread_create(&threads[0], NULL, counter, NULL);
-  }
-  if (size == 0) {
-    return NULL;
-  }
-  pthread_mutex_lock (&mutex_count);
-  prev_malloc_invokation = last_malloc_invokation;
-  clock_gettime(CLOCK_REALTIME, &last_malloc_invokation);
-  print_invokation_debug("malloc_wrapped invoked, size = %d\n", size);
-  pthread_mutex_unlock (&mutex_count);
-  void* res = dlmalloc(size);
-  if (res) {
-    return res;
-  }
-  pthread_mutex_lock (&mutex_count);
-  print_invokation_debug("gc invoked\n");
-  gc();
-  print_invokation_debug("gc finished\n");
-  prev_malloc_invokation = last_malloc_invokation;
-  clock_gettime(CLOCK_REALTIME, &last_malloc_invokation);
-  res = dlmalloc(size);
-  pthread_mutex_unlock (&mutex_count);
-  return res;
+    if (size == 0) {
+        return NULL;
+    }
+    int gc_invoked = 0;
+    struct timeval current_malloc_invokation;
+    gettimeofday(&current_malloc_invokation, NULL);
+    if (prev_prev_malloc_invokation.tv_usec == -1) {
+      prev_prev_malloc_invokation = prev_malloc_invokation;
+      prev_malloc_invokation = current_malloc_invokation;
+
+    } else {
+      struct mallinfo inf = mallinfo();
+      int allocated_size = inf.uordblks;
+      print_invokation_debug("malloc_wrapped invoked, size = %d\n", size);
+      print_invokation_debug("total allocated space = %d\n", allocated_size);
+      print_invokation_debug("total space = %d\n", inf.uordblks + inf.fordblks);
+      struct timeval diff1 = getDiffTime(current_malloc_invokation, prev_malloc_invokation);
+      struct timeval diff2 = getDiffTime(prev_malloc_invokation, prev_prev_malloc_invokation);
+      double T = (diff1.tv_sec*1.0 + diff1.tv_usec*1.0/1000000)/(diff2.tv_sec*1.0 + diff2.tv_usec*1.0/1000000);
+      if (T > 3) {
+        print_invokation_debug("gc invoked\n");
+        gc();
+        gc_invoked = 1;
+        print_invokation_debug("gc finished\n");  
+      }
+      prev_prev_malloc_invokation = prev_malloc_invokation;
+      prev_malloc_invokation = current_malloc_invokation;
+    }
+    
+    void* res = dlmalloc(size);
+    if (!res && !gc_invoked) {
+        print_invokation_debug("gc invoked\n");
+        gc();
+        print_invokation_debug("gc finished\n");
+    }
+    while (!res) {
+        print_invokation_debug("expanding heap\n");
+        HEAP_SIZE *= 2;
+        res = dlmalloc(size);
+    }
+    return res; 
 }
 
 DLMALLOC_EXPORT void mark(void* pointer) {
