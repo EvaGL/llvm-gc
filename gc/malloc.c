@@ -523,7 +523,7 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 /* Version identifier to allow people to support multiple versions */
 
 
-#define DLMALLOC_WRAPPED
+#define DLMALLOC_WRAPPED 1
 #define MORECORE constMoreCore
 #define MORECORE_CANNOT_TRIM
 #define MALLOC_ALIGNMENT ((size_t) (16))
@@ -822,31 +822,24 @@ extern "C" {
 
 /* ------------------- Declarations of public routines ------------------- */
 
-#define SPACE_BASED 0
-#define TIMED 1
-#define NO_SPACE 2
+//#define SPACE_BASED 0
+//#define TIMED 1
+//#define NO_SPACE 2
 
 #define invokation_debug 1
 
 // Uncomment one of this lines to declare malloc wrapper
 //#define MALLOC_WRAPPER TIMED
 //#define MALLOC_WRAPPER NO_SPACE
-#define MALLOC_WRAPPER SPACE_BASED
+//#define MALLOC_WRAPPER SPACE_BASED
 
 #ifndef USE_DL_PREFIX
 #define dlcalloc               calloc
 #define dlfree                 free
-  #ifndef DLMALLOC_WRAPPED
-    #define dlmalloc           malloc
-  #else
-    #if MALLOC_WRAPPER == NO_SPACE
-      #define no_space_malloc malloc
-    #elif MALLOC_WRAPPER == TIMED
-      #define timed_malloc malloc
-    #else
-      // default
-      #define space_based_malloc malloc
-    #endif
+#ifndef DLMALLOC_WRAPPED
+  #define dlmalloc             malloc
+#else
+  #define malloc_wrapper       malloc
 #endif
 #define dlmemalign             memalign
 #define dlposix_memalign       posix_memalign
@@ -6386,7 +6379,7 @@ DLMALLOC_EXPORT void* no_space_malloc(size_t size) {
   print_invokation_debug("total allocated space = %d\n", mallinfo().uordblks);
   print_invokation_debug("total free space = %d\n", mallinfo().fordblks);
   int space =  mallinfo().uordblks + mallinfo().fordblks;
-  print_invokation_debug("total space = %d\n", space);
+  print_invokation_debug("total space = %d\n", HEAP_SIZE);
   void* res = dlmalloc(size);
   if (res) {
     return res;
@@ -6406,7 +6399,7 @@ DLMALLOC_EXPORT void* no_space_malloc(size_t size) {
   return p; 
 }
 
-static double threshold = 0.5;
+static double threshold = 0.75;
 
 DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
     if (size == 0) {
@@ -6416,7 +6409,8 @@ DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
     int allocated_size = inf.uordblks;
     print_invokation_debug("malloc_wrapped invoked, size = %d\n", size);
     print_invokation_debug("total allocated space = %d\n", allocated_size);
-    print_invokation_debug("total space = %d\n", inf.uordblks + inf.fordblks);
+    //print_invokation_debug("total space = %d\n", inf.uordblks + inf.fordblks);
+    print_invokation_debug("total space = %d\n", HEAP_SIZE);
     int gc_invoked = 0;
     if (allocated_size > threshold * HEAP_SIZE && HEAP_SIZE > 0) {
         print_invokation_debug("gc invoked\n");
@@ -6429,6 +6423,7 @@ DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
         print_invokation_debug("gc invoked\n");
         gc();
         print_invokation_debug("gc finished\n");
+        res = dlmalloc(size);
     }
     while (!res) {
         print_invokation_debug("expanding heap\n");
@@ -6436,6 +6431,42 @@ DLMALLOC_EXPORT void* space_based_malloc(size_t size) {
         res = dlmalloc(size);
     }
     return res;
+}
+
+long long ALLOCATED_SINCE_LAST_GC = 0;
+int FSD = 2;
+int HD = 2;
+
+DLMALLOC_EXPORT void* bdw_malloc(size_t size) {
+    if (size == 0) {
+        return NULL;
+    }
+    struct mallinfo inf = mallinfo();
+    int allocated_size = inf.uordblks;
+    print_invokation_debug("malloc_wrapped invoked, size = %d\n", size);
+    print_invokation_debug("total allocated space = %d\n", allocated_size);
+    print_invokation_debug("total space = %d\n", HEAP_SIZE);
+    void* res = dlmalloc(size);
+    if (res) {
+      ALLOCATED_SINCE_LAST_GC += size;
+      return res;
+    } else {
+      if (ALLOCATED_SINCE_LAST_GC >= (HEAP_SIZE/FSD)) {
+        print_invokation_debug("gc invoked\n");
+        gc();
+        print_invokation_debug("gc finished\n");
+        ALLOCATED_SINCE_LAST_GC = 0;
+      } else {
+        HEAP_SIZE *= HD;
+      }
+      res = dlmalloc(size);
+      while (!res) {
+        print_invokation_debug("expanding heap\n");
+        HEAP_SIZE *= 2;
+        res = dlmalloc(size);
+      }   
+    return res;
+  }
 }
 
 struct timeval prev_malloc_invokation = {-1, -1};
@@ -6475,11 +6506,11 @@ DLMALLOC_EXPORT void* timed_malloc(size_t size) {
       int allocated_size = inf.uordblks;
       print_invokation_debug("malloc_wrapped invoked, size = %d\n", size);
       print_invokation_debug("total allocated space = %d\n", allocated_size);
-      print_invokation_debug("total space = %d\n", inf.uordblks + inf.fordblks);
+      print_invokation_debug("total space = %d\n", HEAP_SIZE);
       struct timeval diff1 = getDiffTime(current_malloc_invokation, prev_malloc_invokation);
       struct timeval diff2 = getDiffTime(prev_malloc_invokation, prev_prev_malloc_invokation);
       double T = (diff1.tv_sec*1.0 + diff1.tv_usec*1.0/1000000)/(diff2.tv_sec*1.0 + diff2.tv_usec*1.0/1000000);
-      if (T > 3) {
+      if (T > 1.5) {
         print_invokation_debug("gc invoked\n");
         gc();
         gc_invoked = 1;
@@ -6494,6 +6525,7 @@ DLMALLOC_EXPORT void* timed_malloc(size_t size) {
         print_invokation_debug("gc invoked\n");
         gc();
         print_invokation_debug("gc finished\n");
+        res = dlmalloc(size);
     }
     while (!res) {
         print_invokation_debug("expanding heap\n");
@@ -6628,7 +6660,30 @@ DLMALLOC_EXPORT char address_ok(void* addr) {
     return ok_address(m, addr);
 }
 
-DLMALLOC_EXPORT gcmalloc(size_t s) {
+
+void* (*alloc)(size_t) = NULL;
+
+DLMALLOC_EXPORT void* malloc_wrapper(size_t size) {
+    if (alloc == NULL) {
+        char* text = getenv("GC_STRATEGY");
+        if (text == NULL) {
+            alloc = no_space_malloc;
+        } else {
+            if (strcmp(text, "SPACE_BASED") == 0) {
+              alloc = space_based_malloc;
+            } else if (strcmp(text, "TIME_BASED") == 0) {
+              alloc = timed_malloc;
+            } else if (strcmp(text, "BDW") == 0)  {
+              alloc = bdw_malloc;
+            } else {
+              alloc = no_space_malloc;
+            }       
+        }
+    }
+    return alloc(size);
+}
+
+DLMALLOC_EXPORT void* gcmalloc(size_t s) {
     if (s % MALLOC_ALIGNMENT != 0) {
         s = s - (s % MALLOC_ALIGNMENT) + MALLOC_ALIGNMENT;
     }
