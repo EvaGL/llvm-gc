@@ -87,13 +87,16 @@ namespace {
                 if (!term) {
                     continue;
                 }
-                if (isa<ReturnInst>(term) || isa<ResumeInst>(term)) {
+                if (isa<ReturnInst>(term)) {
                     LoadInst* parent = new LoadInst(prevPtr, "parent", term);
                     BitCastInst* parentCast = new BitCastInst(parent, chainPtr, "parentCast", term);
                     StoreInst* restore = new StoreInst(parentCast, chainBottom, term);
                 }
+                if (BB->isLandingPad()) {
+                    Instruction* firstInPad = BB->getFirstInsertionPt();
+                    StoreInst* restore = new StoreInst(chain, chainBottom, firstInPad);
+                }
             }
-            // TODO: Make proper restore in exception handling
             return true;
         }
     };
