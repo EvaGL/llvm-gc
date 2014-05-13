@@ -642,7 +642,7 @@ MAX_RELEASE_CHECK_RATE   default: 4095 unless not HAVE_MMAP
 #define INSECURE 0
 #endif  /* INSECURE */
 #ifndef MALLOC_INSPECT_ALL
-#define MALLOC_INSPECT_ALL 0
+#define MALLOC_INSPECT_ALL 1
 #endif  /* MALLOC_INSPECT_ALL */
 #ifndef HAVE_MMAP
 #define HAVE_MMAP 1
@@ -826,7 +826,7 @@ extern "C" {
 //#define TIMED 1
 //#define NO_SPACE 2
 
-#define invokation_debug 1
+#define invokation_debug 0
 
 // Uncomment one of this lines to declare malloc wrapper
 //#define MALLOC_WRAPPER TIMED
@@ -6621,7 +6621,7 @@ DLMALLOC_EXPORT void* stack_is_full() {
 }
 
 DLMALLOC_EXPORT size_t go_along_heap() {
-/*This function is copy-paste from function "traverse_and_check" */
+/*This function is based on function traverse_and_check */
   mstate m = gm;
   size_t sum = 0;
   if (is_initialized(m)) {
@@ -6654,6 +6654,18 @@ DLMALLOC_EXPORT size_t go_along_heap() {
 
 }
 
+
+static int count_used_chks = 0;
+
+void count_chunks(void* start, void* end, size_t used, void* arg) {
+  ++count_used_chks;
+}
+
+DLMALLOC_EXPORT size_t count_used_chunks() {    
+  count_used_chks = 0;
+  malloc_inspect_all(count_chunks, NULL);
+  return count_used_chks;
+}
 
 DLMALLOC_EXPORT char address_ok(void* addr) {
     mstate m = gm;  

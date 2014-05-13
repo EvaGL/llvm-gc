@@ -10,5 +10,6 @@ void sweep();
 void* stack_is_full();
 char address_ok(void* addr);
 size_t go_along_heap();
+size_t count_used_chunks();
 
 #endif

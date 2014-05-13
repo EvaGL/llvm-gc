@@ -3,11 +3,13 @@
 #include "mark.h"
 #include <caml/mlvalues.h>
 
-#define N 30000
+#define N 20
 static void* my_stack[N];
 static int end = 0;
 static FILE* file_out;
-static int STACK_IS_FULL = 0;
+static int stack_overflow = 0;
+static int callnum = 1;
+static int is_double_marked = 0;
 
 typedef struct _chain {
     int* meta;
@@ -27,7 +29,7 @@ static void push(void* obj) {
     MDEBUG("push %p\n", obj);
     if (end == N) {
         MDEBUG("Panic! Stack is full!\n");
-        STACK_IS_FULL = 1;
+        stack_overflow = 1;
         return;    
     }
     my_stack[end] = obj;
@@ -42,30 +44,6 @@ static void* pop() {
     return val;
 }
 
-/*static void visit_object(void* start_obj) {
-    if (!start_obj || get_mark(start_obj)) {
-        return;
-    }
-    push(start_obj);
-    while (end != 0) {
-        void* ptr = pop();
-        mark(ptr);
-        int* num_ptr =  (int*) ptr;
-        int num = *num_ptr;
-        int i;
-        for (i = 1; i <= num; ++i) {
-            num_ptr++;
-            int* res = (int *) (ptr + *num_ptr);
-            graph_write(ptr, (void*)*res, file_out);
-            if (*res && !get_mark(*res)) {
-                mark(*res);
-                push((void*)*res);
-            }
-        }
-    }
-}
-*/
-
 static char checked_address(value* addr) {
     if (!addr) {
         MDEBUG("null object\n");
@@ -77,7 +55,12 @@ static char checked_address(value* addr) {
     }        
     if (get_mark(Hp_val(Val_op(addr)))) {
         MDEBUG("already marked\n");
-        return 0;
+        if (is_double_marked) {
+            is_double_marked = 0;
+            return 1;
+        } else {
+            return 0;
+        }
     }
     return 1;
 }
@@ -190,21 +173,37 @@ static void gc_mark() {
         }
         current = current->parent;
     }
-    if (STACK_IS_FULL) {
-        STACK_IS_FULL = 0;
+    size_t k = 0;
+    size_t bound_stack_overflow = 0;
+    if (stack_overflow) {
+      MDEBUG("Stack is full\n");
+      bound_stack_overflow = count_used_chunks();
+      MDEBUG("Num of objects: %d\n", bound_stack_overflow);
+      bound_stack_overflow = bound_stack_overflow / N;
+      MDEBUG("bound = %d\n", bound_stack_overflow);
+    }
+    while (stack_overflow && (k < bound_stack_overflow)) {
+        MDEBUG("%d %d \n", bound_stack_overflow, k);
+        stack_overflow = 0;
+        ++k;
         void* obj = stack_is_full();
-        MDEBUG("%p\n", obj);
+        MDEBUG("Stack is full object: %p\n", obj);
         while (obj) {
-            visit_object(obj);
-            obj = stack_is_full();            
+            visit_object(Val_hp(obj));
+            obj = stack_is_full();
+            is_double_marked = 1;
+            MDEBUG("Stack is full object: %p\n", obj);            
         }    
     }
-    //graph_delete(file_out);
+    /*go_along_heap();*/
+    MDEBUG("Num of objects: %d\n", count_used_chunks());
+    MDEBUG("bound = %d\n", bound_stack_overflow);
 }
 
 
 void gc() {
-    MDEBUG("===============GC Call================\n");
+    MDEBUG("===============GC Call %d================\n", callnum);
+    ++callnum;
     //malloc_stats();
     //go_along_heap();
     gc_mark();
