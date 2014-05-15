@@ -4,8 +4,18 @@
 #include <caml/mlvalues.h>
 
 #define N 20
-static void* my_stack[N];
+#define DFS 1
+/*Select algorithm for visiting objects*/
+/*in DFS we use array as stack*/
+/*in BFS we use array as queue*/
+
+static void* array[N];
 static int end = 0;
+/*in stack and in queue ptr to the next _empty_ field
+  in stack and in queue = N in case of overflow*/
+static int beg = 0;
+/*in stack always 0
+  in queue ptr to the first element*/
 static FILE* file_out;
 static int stack_overflow = 0;
 static int callnum = 1;
@@ -20,9 +30,16 @@ chain* chainBottom = NULL;
 static show_stack() {
     int i = 0;
     for (i = 0; i < N; ++i) {
-        MDEBUG("%p ", my_stack[i]);        
+        MDEBUG("%p ", array[i]);        
     }
     MDEBUG("\n");
+}
+
+static int empty() {
+    if (end == beg) {
+        return 1;
+    }
+    return 0;
 }
 
 static void push(void* obj) {
@@ -30,18 +47,39 @@ static void push(void* obj) {
     if (end == N) {
         MDEBUG("Panic! Stack is full!\n");
         stack_overflow = 1;
-        return;    
+        return;            
     }
-    my_stack[end] = obj;
-    end++;
+    if (DFS) {
+        array[end] = obj;
+        end++;
+    } else {
+        if (end == (N + beg - 1) % N) {
+            array[end] = obj;
+            end = N; /*special sign for queue overflow*/
+        } else {
+            array[end] = obj;
+            end = (end + 1) % N;
+        }
+    }
 }
 
 static void* pop() { 
-    end--;
-    void* val = my_stack[end];
-    MDEBUG("pop %p\n", val);
-    my_stack[end] = NULL;
-    return val;
+    if (DFS) {
+        end--;
+        void* val = array[end];
+        MDEBUG("pop %p\n", val);
+        array[end] = NULL;
+        return val;
+    } else {
+        if (end == N) {
+            end = beg;    
+        }
+        void* val = array[beg];        
+        beg = (beg + 1) % N;
+        MDEBUG("pop %p\n", val);
+        array[end] = NULL;
+        return val;
+    }
 }
 
 static char checked_address(value* addr) {
@@ -118,7 +156,9 @@ static void visit_object(value* start_obj) {
     }
     push(start_obj);
 
-    while (end != 0) {
+
+    int max = 1;
+    while (!empty()) {
         /*while stack is not empty*/
         value v = Val_op(pop());
         MDEBUG("object: %p\n", Op_val(v));
@@ -145,10 +185,14 @@ static void visit_object(value* start_obj) {
             MDEBUG("Field #%d for object %p is %p\n", i, Op_val(v), Op_val(res));
             if (correct_block(Op_val(res))) {                
                 push(Op_val(res));    
+                /*if (max < end - 1) {
+                  max = end - 1;
+                }*/
             }
             ++i;
             /*graph_write((void*)Op_val(ptr), (void*)Op_val(res), file_out);*/
         }
+        /*printf("%d\n", max);*/
     }
 }
 
@@ -177,13 +221,15 @@ static void gc_mark() {
     size_t bound_stack_overflow = 0;
     if (stack_overflow) {
       MDEBUG("Stack is full\n");
+      //printf("Stack is full\n");
       bound_stack_overflow = count_used_chunks();
       MDEBUG("Num of objects: %d\n", bound_stack_overflow);
-      bound_stack_overflow = bound_stack_overflow / N;
+      bound_stack_overflow = bound_stack_overflow;
       MDEBUG("bound = %d\n", bound_stack_overflow);
     }
     while (stack_overflow && (k < bound_stack_overflow)) {
         MDEBUG("%d %d \n", bound_stack_overflow, k);
+        //printf("Stack is full\n");
         stack_overflow = 0;
         ++k;
         void* obj = stack_is_full();
@@ -195,7 +241,10 @@ static void gc_mark() {
             MDEBUG("Stack is full object: %p\n", obj);            
         }    
     }
-    /*go_along_heap();*/
+    /*if (k == bound_stack_overflow) {
+        printf("Because of k!\n");    
+    }*/
+    //go_along_heap();
     MDEBUG("Num of objects: %d\n", count_used_chunks());
     MDEBUG("bound = %d\n", bound_stack_overflow);
 }
