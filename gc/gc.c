@@ -147,27 +147,22 @@ static void visit_object(value* start_obj) {
     if (!correct_block(start_obj)) {
         return;    
     }
+
+    if (checked_address(start_obj)) {
+        mark(Hp_val(Val_op(start_obj)));
+    }
     if (!should_scan(start_obj)) {
-        /*we shouldn't scan this object and its fields, but it is alive*/
-        if (checked_address(start_obj)) {
-            mark(Hp_val(Val_op(start_obj)));
-        }
+        /*we shouldn't scan this object and its fields, but it is alive*/        
         return;        
     }
     push(start_obj);
-
 
     int max = 1;
     while (!empty()) {
         /*while stack is not empty*/
         value v = Val_op(pop());
         MDEBUG("object: %p\n", Op_val(v));
-        if (checked_address(Op_val(v))) {
-            /*ptr belongs to heap*/
-            mark(Hp_val(v));
-        } else {
-            continue;
-        }
+        
         if (!should_scan(Op_val(v))) {
             continue;        
         }
@@ -183,11 +178,9 @@ static void visit_object(value* start_obj) {
             /*visit fields*/
             value res = Field(v, i);
             MDEBUG("Field #%d for object %p is %p\n", i, Op_val(v), Op_val(res));
-            if (correct_block(Op_val(res))) {                
-                push(Op_val(res));    
-                /*if (max < end - 1) {
-                  max = end - 1;
-                }*/
+            if (correct_block(Op_val(res)) && checked_address(Op_val(res))) {
+                mark(Hp_val(res));
+                push(Op_val(res));
             }
             ++i;
             /*graph_write((void*)Op_val(ptr), (void*)Op_val(res), file_out);*/
@@ -224,7 +217,7 @@ static void gc_mark() {
       //printf("Stack is full\n");
       bound_stack_overflow = count_used_chunks();
       MDEBUG("Num of objects: %d\n", bound_stack_overflow);
-      bound_stack_overflow = bound_stack_overflow;
+      bound_stack_overflow = bound_stack_overflow / N;
       MDEBUG("bound = %d\n", bound_stack_overflow);
     }
     while (stack_overflow && (k < bound_stack_overflow)) {
@@ -241,9 +234,6 @@ static void gc_mark() {
             MDEBUG("Stack is full object: %p\n", obj);            
         }    
     }
-    /*if (k == bound_stack_overflow) {
-        printf("Because of k!\n");    
-    }*/
     //go_along_heap();
     MDEBUG("Num of objects: %d\n", count_used_chunks());
     MDEBUG("bound = %d\n", bound_stack_overflow);
