@@ -1,39 +1,39 @@
-##Маркирующий сборщик мусора для [LLVM](http://llvm.org/)
+##Mark-and-sweep garbage collector for [LLVM](http://llvm.org/)
 
-Проект студентов кафедры системного программирования математико-механического факультета СПбГУ Бакрадзе Лианы, Самофалова Александра и Шашковой Елизаветы.
+Project of Bakradze Liana, Samofalov Aleksandr, Shashkova Elizaveta - students of Software engineering chair at Faculty of mathematics and mechanics of Saint Petersburg State University.
 
 
 
-### Инструкция по сборке
-**1. Скачать и собрать из исходников версию LLVM 3.3.** 
+### Instruction
+**1. Download and build LLVM 3.3. from sources**
 
-Cкачать исходники можно с [этой страницы](http://llvm.org/releases/download.html#3.3)
+You can download sources from [here](http://llvm.org/releases/download.html#3.3)
 
-Инструкция по сборке LLVM находится [здесь](http://llvm.org/docs/GettingStarted.html)
+Instruction for building LLVM is [here](http://llvm.org/docs/GettingStarted.html)
 
-**2. Скопируйте содержимое данного репозитория и перейдите к ветке gc**
+**2. Clone repository and switch to the gc branch**
 
     git clone https://github.com/EvaGL/llvm-gc.git
     cd llvm-gc
     git checkout gc
     
-**3. Скопируйте папку llvm-compiler-plugin в папку lib внутри исходников LLVM и перейдите в нее**
+**3. Copy folder llvm-compiler-plugin to the lib folder inside LLVM sources and go there**
 
-**4. Соберите плагин**
+**4. Build plugin**
 
     make
     make install
 
-**5. Вернитесь в папку с содержимым данного репозитория и перейдите в папку gc**
+**5. Return to the folder containing this repository and go to the gc folder**
 
-**6. Соберите библитотеку со сборщиком мусора и тесты**
+**6. Build gc library and tests**
 
     make
     make tests
 
-**7. Добавьте путь к собранной библиотекой в переменную LD_LIBRARY_PATH**
+**7. Append path to the library in the LD_LIBRARY_PATH enviroment variable**
 
     export LD_LIBRARY_PATH="$(pwd):$LD_LIBRARY_PATH" 
-Если вы находитесь не в папке gc, то вы дожны написать вместо $(pwd) абсолютный путь до этой папки.
-Эту команду нужно выполнять каждый раз когда вы работаете с данным сборщиком мусора.
-Чтобы этого не делать можно добавить эту команду в файл ~/.profile и перезапустить систему
+Write absolute path to the folder with library instead of $(pwd) if you are not in gc folder.
+You should run this command every time when you are working with this garbage collector.
+If you don't want to do that every time you must add this command to ~/.profile and reboot.
